@@ -1,4 +1,5 @@
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
+// https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA
 #include <esp_now.h>
 #include <WiFi.h>
 
@@ -28,14 +29,14 @@ uint16_t getColorForNumber(int n) {
   return 0;
 }
 // --- Textzuordnung ---
-char getTextForNumber(int n) 
+char* getTextForNumber(int n) 
 {
-  switch (n) {
-    case 1: return "Spot an"; // Weiß - Spot an
-    case 2: return "Licht an"; // Rot - Licht an
-    case 3: return "Vorhang auf"; // Blau - Vorhang auf
-    case 4: return "Mikro an"; // Grün - Mirko an
-    case 5: return "Umbau fertig"; // Gelb - Umbauf fertig
+  switch (n) {                // 64 Pixel, 6 Pixel pro Zeichen = 10 Zeichen maximal
+    case 1: return "Spot an"; // Weiß - Spot an - 7Z 
+    case 2: return "Licht an"; // Rot - Licht an - 8Z
+    case 3: return "Vorhang"; // Blau - Vorhang auf - 7Z
+    case 4: return "Mikro an"; // Grün - Mirko an - 8Z
+    case 5: return "Fertig"; // Gelb - Umbau fertig - 6Z
   }
   return "Bereit";
 }
@@ -51,30 +52,34 @@ void showIdleScreen() {
   display->print("Bereit");
 }
 
-// --- Zahl im Kreis ---
-void drawNumberCircle(int n) {
+// --- Nachricht zentrieren ---
+int centerX(const char* text) {
+  int textWidth = strlen(text) * 6; // ein Zeichen = 5 Pixel, ein Zeichen Leerzeichen
+  return (64 - textWidth) / 2;   // 64 = Panelbreite 
+}
+
+
+// --- Nachricht schreiben ---
+void drawMessage(int n) {
   display->fillScreen(0);
 
   uint16_t color = getColorForNumber(n);
+  char* text = getTextForNumber(n);
 
-  // Kreis
-  int cx = 32;
-  int cy = 16;
-  int r = 14;
-  display->drawCircle(cx, cy, r, color);
-
-  // Zahl
+  // Text
   display->setTextColor(color);
-  display->setTextSize(2);
+  display->setTextSize(1);
 
-  int x = 28;
-  int y = 10;
+  int x = centerX(text);
+  int y = 8;            // leichte Vertikalposition
+
   display->setCursor(x, y);
-  display->print(n);
+  display->print(text);
 }
 
+
 // --- Callback: ESP-NOW Daten empfangen ---
-void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+void onDataRecv(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
   esp_now_message_t msg;
   memcpy(&msg, incomingData, sizeof(msg));
 
@@ -82,7 +87,7 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   inIdle = false;
 
   display->setBrightness8(128);
-  drawNumberCircle(msg.number);
+  drawMessage(msg.number);
 }
 
 void setup() {
@@ -120,7 +125,7 @@ void setup() {
 
 
 void loop() {
-  // --- Timeout -> Idle ---
+  // --- Timeout -> IdleScree ---
   if (!inIdle && millis() - lastUpdate > timeoutMs) {
     inIdle = true;
     showIdleScreen();
